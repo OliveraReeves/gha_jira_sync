@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env
 load_dotenv()
 
-CONVENTIONAL_COMMIT_PATTERN = re.compile(r"(feat|fix)\((TNG-\d+)\)")
+#CONVENTIONAL_COMMIT_PATTERN = re.compile(r"(feat|fix)\((TNG-\d+)\)")
 
 
 @click.command()
@@ -27,23 +27,25 @@ CONVENTIONAL_COMMIT_PATTERN = re.compile(r"(feat|fix)\((TNG-\d+)\)")
     required=True,
     help="GitHub token (can use Actions built-in)",
 )
-@click.option(
-    "--output", default="release_notes.md", help="File to write release notes"
-)
-@click.option("--prev-ref", default="2025-06-11")
+@click.option("--prev-ref")
 @click.option(
     "--depth",
     default=1,
     show_default=True,
     help="How many levels of git dependencies to scan recursively",
 )
+@click.option(
+    "--commit-pattern",
+    default=r"(feat|fix)\((TNG-\d+)\)",
+    help="Regex pattern to extract ticket IDs from commit messages",
+)
 def draft_release_notes(
     repo_url: str,
     current_ref: str,
     github_token: str,
-    output: str,
     prev_ref: str,
     depth: int,
+    commit_pattern: str,
 ) -> Optional[Dict[str, str]]:
     """
     Draft release notes for a repo and its git dependencies using GitHub API only.
@@ -51,6 +53,9 @@ def draft_release_notes(
     headers = {"Authorization": f"token {github_token}"}
 
     owner, repo_name = extract_owner_repo(repo_url)
+
+    pattern = re.compile(commit_pattern)
+
 
     # Step 1: resolve previous reference
     latest_tag_name = prev_ref or get_latest_release_tag(owner, repo_name, headers)
@@ -88,13 +93,14 @@ def draft_release_notes(
         headers,
         depth,
         visited,
+        pattern
     )
 
     def generate_release_notes(output_dict):
         """
         Convert ticket dictionary to Markdown table for release notes.
         """
-        release_notes = "| Service | Compare URL | Tickets |\n"
+        release_notes = "| Repo | Compare URL | Tickets |\n"
         release_notes += "|--------|-------------|--------|\n"
 
         for service, info in output_dict.items():
@@ -115,6 +121,7 @@ def scan_dependencies(
     headers: Dict[str, str],
     depth: int,
     visited: Set[str],
+    pattern
 ) -> Dict[str, list]:
     if depth <= 0:
         return {}
@@ -157,7 +164,7 @@ def scan_dependencies(
         tickets = []
         for c in commits:
             msg = c["commit"]["message"]
-            matches = CONVENTIONAL_COMMIT_PATTERN.findall(msg)
+            matches = pattern.findall(msg)
             tickets.extend([ticket for _, ticket in matches])
 
         if tickets:
@@ -182,6 +189,7 @@ def scan_dependencies(
                     headers,
                     depth - 1,
                     visited,
+                    pattern
                 )
                 release_notes.update(nested_notes)
             except Exception:
