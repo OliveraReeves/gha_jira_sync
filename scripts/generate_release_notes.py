@@ -162,10 +162,18 @@ def scan_dependencies(
 
         commits = resp.json().get("commits", [])
         tickets = []
+
         for c in commits:
             msg = c["commit"]["message"]
+
             matches = pattern.findall(msg)
-            tickets.extend([ticket for _, ticket in matches])
+            tickets.extend([ticket.upper() for _, ticket in matches])
+
+            pr_matches = re.findall(r"merge pull request #\d+ from [^\s/]+/([A-Z]+-\d+)", msg, re.IGNORECASE)
+            tickets.extend([t.upper() for t in pr_matches])
+
+
+        tickets = list(set(tickets))
 
         if tickets:
             release_notes[dep_name] = {
