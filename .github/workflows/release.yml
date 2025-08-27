@@ -10,29 +10,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the current repo
       - uses: actions/checkout@v4
 
-      # Clone the gha_jira_sync repo
       - name: Clone gha_jira_sync
         run: |
           git clone https://github.com/OliveraReeves/gha_jira_sync.git
           cd gha_jira_sync
 
-      # Set up Python environment using uv
       - name: Install uv
         uses: astral-sh/setup-uv@v6
 
       - name: Set up Python
         run: uv python install
 
-      # Install your gha_jira_sync package
       - name: Install gha_jira_sync
         run: |
           cd gha_jira_sync
           pip install .
 
-      # Run the generate_release_notes.py script
       - name: Run Ticket Script
         id: tickets
         env:
@@ -44,31 +39,14 @@ jobs:
           echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # Fetch existing release notes
-      - name: Get existing release notes
-        id: get_release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const release = await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: context.event.release.tag_name
-            });
-            return release.data.body || "";
-          result-encoding: string
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Update GitHub Release (append to existing notes)
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.release.tag_name }}
           name: ${{ github.event.release.name }}
           body: |
-            ${{ steps.get_release.outputs.result }}
+            ${{ github.event.release.body }}
 
             ${{ steps.tickets.outputs.release_notes }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
