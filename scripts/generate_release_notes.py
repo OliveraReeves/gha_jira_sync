@@ -84,17 +84,57 @@ def draft_release_notes(
                 f"Warning: Could not fetch poetry.lock at previous release {latest_tag_name}: {e}"
             )
 
-    # Step 3: scan recursively — always use root lockfiles for SHAs
+    # Step 3a: collect tickets from the root repo itself
+    release_notes = {}
+
+    if prev_ref_sha:
+        compare_url = f"https://api.github.com/repos/{owner}/{repo_name}/compare/{prev_ref_sha}...{current_ref}"
+    else:
+        compare_url = (
+            f"https://api.github.com/repos/{owner}/{repo_name}/commits/{current_ref}"
+        )
+
+    resp = requests.get(compare_url, headers=headers)
+    if resp.status_code == 200:
+        commits = resp.json().get("commits", [])
+        tickets = []
+
+        for c in commits:
+            msg = c["commit"]["message"]
+
+            matches = pattern.findall(msg)
+            tickets.extend([ticket.upper() for _, ticket in matches])
+
+            pr_matches = re.findall(
+                r"merge pull request #\d+ from [^\s/]+/([A-Z]+-\d+)", msg, re.IGNORECASE
+            )
+            tickets.extend([t.upper() for t in pr_matches])
+
+        tickets = sorted(set(tickets))
+        if tickets:
+            release_notes[repo_name] = {
+                "compare_url": f"https://github.com/{owner}/{repo_name}/compare/{prev_ref_sha}...{current_ref}"
+                if prev_ref_sha
+                else None,
+                "tickets": tickets,
+            }
+    else:
+        print(f"⚠️ Failed to fetch root repo commits: {resp.text}")
+
+    # Step 3b: scan dependencies recursively
     visited: Set[str] = set()
-    release_notes = scan_dependencies(
-        pyproject_data,
-        prev_lock_data,
-        current_lock_data,
-        headers,
-        depth,
-        visited,
-        pattern
+    release_notes.update(
+        scan_dependencies(
+            pyproject_data,
+            prev_lock_data,
+            current_lock_data,
+            headers,
+            depth,
+            visited,
+            pattern,
+        )
     )
+
 
     def generate_release_notes(output_dict):
         """
