@@ -30,7 +30,7 @@ load_dotenv()
 @click.option("--prev-ref")
 @click.option(
     "--depth",
-    default=1,
+    default=3,
     show_default=True,
     help="How many levels of git dependencies to scan recursively",
 )
@@ -58,7 +58,7 @@ def draft_release_notes(
 
 
     # Step 1: resolve previous reference
-    latest_tag_name = prev_ref or get_latest_release_tag(owner, repo_name, headers)
+    latest_tag_name = prev_ref or get_previous_release(owner, repo_name, current_ref, headers)
     prev_ref_sha = None
     if latest_tag_name:
         prev_ref_sha = get_tag_commit_sha(owner, repo_name, latest_tag_name, headers)
@@ -223,14 +223,64 @@ def fetch_file(
     return base64.b64decode(content_b64).decode()
 
 
-def get_latest_release_tag(
-    owner: str, repo: str, headers: Dict[str, str]
+def get_previous_release(
+    owner: str, repo: str, current_tag: str, headers: Dict[str, str]
 ) -> Optional[str]:
-    url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
-    resp = requests.get(url, headers=headers)
-    if resp.status_code == 200:
-        return resp.json()["tag_name"]
+    """
+    Get the previous release tag name or commit SHA in a GitHub repository,
+    given either a tag name or a commit SHA as current_tag.
+
+    :param owner: GitHub repo owner
+    :param repo: GitHub repo name
+    :param current_tag: Current tag name or commit SHA
+    :param headers: HTTP headers (e.g., {"Authorization": "token <TOKEN>"})
+    :return: Previous release tag name or commit SHA, or None if not found
+    """
+
+    # Step 1: Get all releases
+    url = f"https://api.github.com/repos/{owner}/{repo}/releases"
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        raise Exception(
+            f"GitHub API request failed: {response.status_code} {response.text}"
+        )
+
+    releases = response.json()
+    # Sort releases by creation date descending (most recent first)
+    releases_sorted = sorted(releases, key=lambda r: r["created_at"], reverse=True)
+
+    # Step 2: Try to match by tag name first
+    for i, release in enumerate(releases_sorted):
+        if release["tag_name"] == current_tag:
+            if i + 1 < len(releases_sorted):
+                return releases_sorted[i + 1]["tag_name"]
+            else:
+                return None
+
+    # Step 3: If current_tag is a commit SHA, match by release commit SHA
+    # For this, we need to get the commit SHA of each release tag
+    for i, release in enumerate(releases_sorted):
+        tag_name = release["tag_name"]
+        tag_url = (
+            f"https://api.github.com/repos/{owner}/{repo}/git/refs/tags/{tag_name}"
+        )
+        tag_resp = requests.get(tag_url, headers=headers)
+        if tag_resp.status_code != 200:
+            continue  # skip if tag info can't be retrieved
+
+        tag_data = tag_resp.json()
+        # Lightweight tag points directly to commit
+        sha = tag_data['object']['sha']
+        if sha == current_tag:
+            if i + 1 < len(releases_sorted):
+                return releases_sorted[i + 1]['tag_name']
+            else:
+                return None
+
+    # Not found
     return None
+
+
 
 
 def get_tag_commit_sha(
