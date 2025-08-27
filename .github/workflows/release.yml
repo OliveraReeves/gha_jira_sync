@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the current repo (optional if script is in the same repo)
+      # Checkout the current repo
       - uses: actions/checkout@v4
 
       # Clone the gha_jira_sync repo
@@ -18,8 +18,6 @@ jobs:
         run: |
           git clone https://github.com/OliveraReeves/gha_jira_sync.git
           cd gha_jira_sync
-          # Optional: check out a specific branch or tag
-          # git checkout main
 
       # Set up Python environment using uv
       - name: Install uv
@@ -46,13 +44,31 @@ jobs:
           echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # Update release description with Markdown
-      - name: Update GitHub Release
-        uses: actions-ecosystem/action-update-release@v1
+      # Fetch existing release notes
+      - name: Get existing release notes
+        id: get_release
+        uses: actions/github-script@v7
         with:
-          tag: ${{ github.event.release.tag_name }}
-          body: ${{ steps.tickets.outputs.release_notes }}
-          draft: false
-          prerelease: false
+          script: |
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: context.event.release.tag_name
+            });
+            return release.data.body || "";
+          result-encoding: string
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Update GitHub Release (append to existing notes)
+      - name: Update GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          name: ${{ github.event.release.name }}
+          body: |
+            ${{ steps.get_release.outputs.result }}
+
+            ${{ steps.tickets.outputs.release_notes }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
