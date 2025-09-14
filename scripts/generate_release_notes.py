@@ -28,7 +28,7 @@ load_dotenv()
     required=True,
     help="GitHub token (can use Actions built-in)",
 )
-@click.option("--prev-ref",default="6380cc3f829977344289893683eb36935af1c670")
+@click.option("--prev-ref")
 @click.option(
     "--depth",
     default=3,
