@@ -1,3 +1,4 @@
+import os
 
 import click
 import toml
@@ -27,7 +28,7 @@ load_dotenv()
     required=True,
     help="GitHub token (can use Actions built-in)",
 )
-@click.option("--prev-ref")
+@click.option("--prev-ref",default="6380cc3f829977344289893683eb36935af1c670")
 @click.option(
     "--depth",
     default=3,
@@ -150,8 +151,14 @@ def draft_release_notes(
         print(release_notes)
         return release_notes
 
-    return generate_release_notes(release_notes)
+    release_notes=generate_release_notes(release_notes)
 
+    if running_in_github_actions():
+        with open("release_notes.txt", "w", encoding="utf-8") as f:
+            f.write(release_notes)
+
+def running_in_github_actions() -> bool:
+    return os.getenv("GITHUB_ACTIONS") == "true"
 
 # ---------------- Recursive Dependency Scanner ----------------
 def scan_dependencies(

@@ -2,9 +2,9 @@
 name = "gha-jira-sync"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 dependencies = [
-    "click>=8.2.1",
+    "click>=8",
     "gitpython>=3.1.45",
     "python-dotenv>=1.1.1",
     "requests>=2.32.5",

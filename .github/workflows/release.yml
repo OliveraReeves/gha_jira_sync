@@ -34,10 +34,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
         run: |
           cd gha_jira_sync
-          RELEASE_NOTES=$(python scripts/generate_release_notes.py --repo-url ####)
-          echo "release_notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          RELEASE_NOTES=$(python scripts/generate_release_notes.py --repo-url https://github.com/renalreg/webapi)
+          {
+            echo "release_notes<<EOF"
+            cat release_notes.txt
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Update GitHub Release
         uses: softprops/action-gh-release@v1
